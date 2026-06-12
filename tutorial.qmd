@@ -1,0 +1,521 @@
+---
+title: "Introduction to Statistics for Parasitology"
+format:
+  html: 
+    toc: true
+    embed-resources: true
+    number-sections: true
+    fig-numbering: true
+  pdf: 
+    toc: false
+    number-sections: true
+    fig-numbering: true
+editor: 
+  markdown: 
+    wrap: 72
+---
+
+# Overview
+
+This document is an overview for some statistical methods commonly used
+in parasitology (and biology in general). It is not meant to be a
+statistical textbook, just a primer to get you up and running with your
+own analysis. For this tutorial, you will need acomputer with a recent
+version of [R and RStudio
+installed](https://posit.co/products/open-source/rstudio). If you cannot
+install RStudio, perhaps because you have a Chromebook, you can use the
+Posit [RStudio Cloud
+edition](https://posit.co/products/enterprise/cloud) (requires free
+account signup).
+
+::: callout-tip
+Install R *before* installing RStudio. The download links at the link
+above should take care of this for you.
+:::
+
+# Why do we have to do statistics?
+
+Science works by testing **hypotheses**, or proposed explanations for
+natural phenomena, against data. At some point, a scientist must
+determine whether the data they have collected **support** or **do not
+support** their hypothesis. Support or non-support manifest as the data
+either matching the predictions of a hypothesis, or not matching the
+predictions of a hypothesis. The **predictions** of a hypothesis are
+patterns that would be expected in the data if the hypothesis were true.
+In science, we require that any hypothesis be **falsifiable**, at least
+in principle. This means that there must be some observation that would
+prove a hypothesis false. That is, a false hypothesis must make at least
+some false predictions. A true hypothesis, by contrast, should generate
+*only* true predictions.
+
+The trouble is, biological data are noisy. Individual organisms differ
+from one another, measurements are imperfect, and random chance
+influences every sample we collect. As a result, patterns can appear in
+a dataset even when no real biological effect exists. Our goal is to
+distinguish true biological **signals** from background **noise**.
+
+Statistical tests help us do this. They ask whether the pattern we
+observed is stronger than we would expect to see from random variation
+alone. If the observed pattern would be very unlikely to arise from
+noise by itself, we have evidence that a real signal may be present.
+This evidence is summarized by the *p*-value, which estimates how
+surprising our data would be if there were actually no biological
+effect. Smaller *p*-values suggest a stronger signal relative to the
+background noise, while larger *p*-values suggest that the observed
+pattern could easily be explained by random variation. Patterns that are
+stronger than what would be expected by chance are called
+**statistically significant**. For historical (and somewhat arbitrary
+and controversial reasons), biologists usually use $p<0.05$ as the
+threshold for significance.
+
+Let's consider an example. A researcher observes that she tends to find
+more parasitic worms in larger fish. After some reading and thinking,
+she develops a hypothesis:
+
+**"Larger fish tend to have more parasites because larger fish tend to
+be older, and thus have had more time to accumulate parasites."**
+
+From this proposed explanation, the researcher can deduce several
+predictions that logically follow:
+
+1.  **Prediction 1:** Adult fish will have more parasites in their
+    bodies than juvenile fish.
+
+2.  **Prediction 2:** There will be a positive correlation between fish
+    body length and the number of parasitic worms in that fish.
+
+If both of these predictions are true, then that would be good support
+for her hypothesis. If one or neither is true, then the hypothesis is
+not supported and should either be revised or discarded.
+
+The researcher collects data from as many fish as she can find, and gets
+these results. First, the results related to prediction 1:
+
+```{r}
+#| echo: false
+#| fig-width: 5
+#| fig-height: 4
+
+set.seed(123)
+d1 <- data.frame(age="Adult", y=rpois(100, 10))
+d2 <- data.frame(age="Juvenile", y=rpois(100, 5))
+dx <- rbind(d1, d2)
+
+par(mfrow=c(1,1), mar=c(5.1, 5.1, 1.1, 1.1), bty="n", lend=1, las=1,
+    cex.axis=1.4, cex.lab=1.4)
+boxplot(y~age, data=dx, xlab="Host age", ylab="Parasite count", ylim=c(0, max(dx$y)))
+```
+
+Second, the results related to prediction 2:
+
+```{r}
+#| echo: false
+#| fig-width: 5
+#| fig-height: 4
+
+
+set.seed(321)
+dy <- data.frame(x=runif(60, 5, 25))
+dy$y <- rpois(60, 3+0.9*dy$x)
+par(mfrow=c(1,1), mar=c(5.1, 5.1, 1.1, 1.1), bty="n", lend=1, las=1,
+    cex.axis=1.4, cex.lab=1.4)
+plot(dy$x, dy$y, xlab="Fish length (cm)", ylab="Parasite count",
+     ylim=c(0, max(dy$y)))
+```
+
+Were her predictions supported? The figures suggest yes, but we need to
+do a formal test in order to say yes with confidence.
+
+For the first figure, what we want is to see if the means of the two
+groups differ. If the means differ, then the hypothesis is supported. If
+the means do not differ, then the hypothesis is *not* supported. It's
+not enough to just look at the sample means--9.67 for adults and 4.92
+for juveniles--we have to compare the pattern we observed to what could
+have happened if the prediction was false. That is, if the means were
+really the same. The proper test for this situation is called a
+**Student's *t*-test**, or just ***t*-test**. In this case:
+
+```{r}
+t.test(y~age, data=dx)
+```
+
+The *p*-value indicates that the difference in means between the adults
+and juveniles is **statistically significant:** larger and more
+consistent than what would be expected if there was no difference
+between groups.
+
+In the case of prediction 2, the researcher could check for a **linear
+correlation**, or reliable covariation between the "parasite count" and
+"fish length":
+
+```{r}
+cor.test(dy$x, dy$y)
+```
+
+Again, the *p*-value less than 0.05 confirms the researcher's suspicion
+that the correlation was stronger than might be expected if there was no
+correlation.
+
+These were just examples--we will explore each of these techniques in
+detail below. For now, just remember:
+
+1.  Scientists look for patterns, but data is noisy.
+
+2.  Statistics helps us tell how likely it is we are seeing signal or
+    noise--but does not **prove** whether a signal exists.
+
+3.  A *p*-value can never be 0, so statistics can always lead us astray
+    if we are not careful.
+
+4.  "Statistically significant" is not the same as "biologically
+    significant".
+
+# Types of tests
+
+There are thousands of statistical tests out there, but most biologists
+only ever need a handful. One of the hardest parts of "doing statistics"
+for many people is choosing which test to use. If you ask a
+statistician, they are going to ask you, "Well, what *question* are you
+trying to answer?". This is because every statistical test answers a
+particular question:
+
+-   Do groups A and B have the same mean?
+
+-   As variable $x$ changes, does variable $y$ also tend to change?
+
+-   If variable $x$ changes by this much, how much will $y$ change?
+
+-   If event $G$ happens, how likely is it that event $H$ also happens?
+
+-   Do values in group $A$ tend to be greater than, or smaller than,
+    values in group $B$?
+
+-   Are there categories that consistently and reliably capture the
+    variation in these sample units?
+
+Notice that all of the statements above are statistical statements, not
+necessarily biological statements. Translating biological ideas and
+questions into statistical statements and questions is one of the
+hardest parts of doing statistics.
+
+The hypotheses that we test in biology tend to fall into just a few
+categories:
+
+1.  Testing for a difference in **mean** or **location** between groups.
+
+2.  Testing for a **continuous relationship** between a **response
+    variable** (or multiple variables) and one or more **predictor
+    variables**. Also referred to as predicting or **modeling** a
+    continuous variable.
+
+3.  Testing for (lack of) **independence between categories** of
+    observations.
+
+4.  **Classifying** observations based on predictor variables.
+
+These categories are not mutually exclusive...some questions can be
+analyzed in $>1$ way!
+
+# Summary statistics
+
+## Central tendency and variability
+
+One of the first tasks in data analysis is to summarize the data. This
+means presenting values that express the average or **central
+tendency**--the typical value in a dataset--and some idea of the
+**variability**.
+
+Central tendency is usually expressed as the **mean** or **median**:
+
+-   **Mean:** the sum of all values divided by the number of values.
+    This tells you, "if all values were the same, what would they be?".
+
+-   **Median:** the middle value or 50th percentile. If you lined up all
+    values from smallest to greatest, this value would be in the center.
+
+Variability is usually expressed as the **standard deviation** or
+**interquartile range**:
+
+-   **Standard deviation (SD):** the square-root of the **variance**, or
+    mean squared deviation from the mean. The larger the SD, the more
+    spread out the values tend to be.
+
+-   **Interquartile range (IQR):** the difference between the 75th
+    percentile and the 25th percentile of a set of observations. By
+    definition, 50% of observations fall in this interval. The larger
+    the IQR, the more spread out the value are.
+
+When summarizing data, we usually present the sample mean $\bar{x}$ and
+the sample SD $s$ as $\bar{x}\pm s$. E.g., $3.2 \pm 0.8$ cm.
+
+We can see the effect of the mean and SD by examining some distributions with different $\mu$ and $\sigma$.
+
+```{r}
+# possible values of distribution
+xvals <- seq(-5, 5, length=1000)
+
+# calculate probability distribution function (PDF)
+# of each x value under different mu and sigma. 
+# PDF expresses relative likelihood of a value.
+pdf1 <- dnorm(xvals, mean=0, sd=0.2)
+pdf2 <- dnorm(xvals, mean=0, sd=1)
+pdf3 <- dnorm(xvals, mean=0, sd=4)
+pdf4 <- dnorm(xvals, mean=2, sd=0.5)
+
+# plot the PDFs
+plot(xvals, pdf1, type="l", lwd=3, 
+     xlab="X value", ylab="PDF(x)",
+     ylim=c(0, 2))
+points(xvals, pdf2, type="l", lwd=3, col="red3")
+points(xvals, pdf3, type="l", lwd=3, col="blue3")
+points(xvals, pdf4, type="l", lwd=3, col="green4")
+legend("topleft",
+       legend=c(
+         expression(mu==0~sigma==0.2),
+         expression(mu==0~sigma==1),
+         expression(mu==0~sigma==4),
+         expression(mu==2~sigma==0.5)
+       ),
+       lwd=3, col=c("black", "red3", "blue3", "green4"))
+```
+
+The figure shows that the mean $\mu$ shifts the mean, which is also the most likely value (and thus peak of the graph). The SD $\sigma$ determines how spread out the values are.
+
+## Sample vs. population statistics
+
+When we collect data, we collect a **sample** of all possible values. The set of all possible values is the **population** of values. As biologists we are usually interested in making inferences about the population using estimates derived from sample data.
+
+Let's explore some data from the [normal distribution](https://en.wikipedia.org/wiki/Normal_distribution) for an example. We will use R to draw *samples* from a distribution with a population mean ($\mu$) of 10 and a population SD ($\sigma$) of 3.
+
+```{r}
+# draw 10 values from the underlying distribution
+rand.values <- rnorm(10, mean=10, sd=3)
+
+# calculate the sample mean and sample SD
+mean(rand.values)
+sd(rand.values)
+```
+
+Your results will be different from those above, because the values are random, but the sample mean is likely around 10 and the sample SD around 3. If you repeat those 3 commands, you will get different numbers each time. The sample mean will probably never exactly equal the true $\mu$, but it will be close. If you take more samples, then the sample mean should become a better estimator of the population mean:
+
+```{r}
+# draw 100 values from the underlying distribution,
+# then calculate the sample mean and SD
+rand.values100 <- rnorm(100, mean=10, sd=3)
+mean(rand.values100)
+sd(rand.values100)
+```
+
+Because of randomness, your sample mean might be more correct with 10 samples than with 1000 samples! But, the long-run average of sample means will be better estimators of $\mu$ with larger sample sizes. We can test this with simulation:
+
+```{r}
+# population parameters
+mu <- 10
+sigma <- 3
+
+# sample sizes to test
+samp.sizes <- c(3:10, 2:10*10, 2:10*100)
+n.samp.sizes <- length(samp.sizes)
+
+# how many simulations per sample size?
+sims <- 1000
+
+# structure to store simulated sample means
+# for each sample size
+sim.list <- vector("list", length=n.samp.sizes)
+
+# execute simulations in a loop
+for(i in 1:n.samp.sizes){
+  # vector to hold simulated sample means for
+  # each replicate j
+  sim.vector <- numeric(sims)
+  # simulate sample means in a loop
+  for(j in 1:sims){
+    sim.vector[j] <- mean(rnorm(samp.sizes[i], mu, sigma))
+  }#j
+  # store in list
+  sim.list[[i]] <- sim.vector
+}#i
+
+# what is the mean estimate at each sample size?
+mean.mean <- sapply(sim.list, mean)
+# what is the spread of estimates of mu at each
+# sample size?
+sim.ranges <- sapply(sim.list, range)
+
+# plot the estimate and range of estimates vs.
+# sample size
+plot(samp.sizes, mean.mean, lwd=3, type="o", pch=16, log="x",
+     cex=1.5, xlab="Sample size", ylab="Mean of sample means",
+     ylim=c(5, 15))
+segments(samp.sizes, sim.ranges[1,], samp.sizes, sim.ranges[2,],
+         lwd=3)
+```
+
+As you can see, the estimates of the true population mean converge rather quickly on the correct value. But the uncertainty around that estimate (the width of the vertical bars) takes quite a while longer to shrink. Try repeating the code block above with different values of `mu` and `sigma` to see if the pattern changes.
+
+## Summarizing data in R
+
+The most common summary statistics have eponymous functions in R: `mean()`, `sd()`, `var()`, `IQR()`, `quantile()`, and so on. 
+
+```{r}
+#| collapse: true
+
+# get some random values
+# with mu = 0 and sigma = 1
+# (standard normal distribution)
+z <- rnorm(100)
+```
+
+```{r}
+# mean
+mean(z)
+```
+
+```{r}
+# sd
+sd(z)
+```
+
+```{r}
+# variance
+var(z)
+```
+
+```{r}
+# quantiles 
+## 20th percentile: 20% of values are <= this value
+quantile(z, 0.2)
+```
+
+```{r}
+## 90th percentile: 90% of values are <= this value
+quantile(z, 0.9)
+```
+
+```{r}
+# median
+median(z)
+```
+
+```{r}
+# also the median
+quantile(z, 0.5)
+```
+
+```{r}
+# IQR
+IQR(z)
+```
+
+When summarizing values, we typically write either $\bar{x}\pm s$ or *median (IQR)*. Make sure not to confuse the sample mean $\bar{x}$ with the population mean $\mu$. Likewise, do not present the sample SD $s$ as the population SD $\sigma$.
+
+:::{.callout-tip}
+**Missing values**
+
+When a dataset contains missing values, you need to tell the summarizing function to ignore them, ususally with argument `na.rm=TRUE`. For example, `mean(x, na.rm=TRUE)`.
+:::
+
+## Summarizing by groups in R
+
+To summarize data by group in R, use the function `aggregate()`. For this example, we will use the built-in *iris* dataset, [which contains measurements taken from 150 flowers of 3 different species of *Iris*](https://en.wikipedia.org/wiki/Iris_flower_data_set). 
+
+We can use aggregate to make a table with the mean and SD of the petal length of each species in `iris`.
+
+```{r}
+# calculate mean of each species
+ag.petal <- aggregate(Petal.Length~Species, data=iris, mean)
+
+# calculate sd of each species
+ag.petal$SD <- aggregate(Petal.Length~Species, data=iris, sd)$Petal.Length
+ag.petal
+```
+
+Some people prefer to use `tapply()` instead of a second call to `aggregate()`:
+
+```{r}
+ag2 <- aggregate(Petal.Length~Species, data=iris, mean)
+ag2$sd <- tapply(iris$Petal.Length, iris$Species, sd)
+ag2
+```
+
+You can also use `tapply()` to build a data frame of summary statistics from scratch, although `aggregate()` is usually safer because of how it handles missing groups.
+
+R function `aggregate()` does what Pivot Tables do in Excel: summarize by groups. However, R has a huge advantage over Excel in that it can summarize by any function you can define, as opposed to the short list of functions available in Excel. For example, you could count the number of values >= 3 or between arbitrary values like 3.5 and 4.7. A function defined and used within a function as shown below is called an **anonymous function**. 
+
+```{r}
+# count number of values >=3 with an anonymous function
+ag3 <- aggregate(Petal.Length~Species, data=iris, 
+                 function(x){length(which(x>=4))})
+ag3
+```
+
+```{r}
+# count number of values between 3.5 and 4.7
+ag4 <- aggregate(Petal.Length~Species, data=iris,
+                 function(x){length(which(x>3.5 & x<4.7))})
+ag4
+```
+
+Here is an example where we count the number of missing values and number of infinite values...two very useful functions for figuring out why your code doesn't work! These examples also show the use of anonymous functions in `tapply()` as well as in `aggregate()`.
+
+```{r}
+tapply(iris$Petal.Length, iris$Species,
+       function(x){length(which(is.na(x)))})
+```
+
+```{r}
+aggregate(Petal.Length~Species, data=iris, 
+          function(z){any(is.nan(z))})
+```
+
+# Tests comparing groups
+
+In a test for difference in mean or location, we are interested in
+whether observations differ between groups. This can mean the **central
+tendency**, or "typical value", usually expressed as the **mean**
+(arithmetic average). A test of this kind evaluates a prediction like,
+"a typical value in group A is different from a typical value in group
+B". Alternatively, we can test for a difference in **location**: the
+relative position of random values from 2 or more groups. This is a
+slightly different statement: "values in group A tend to be greater than
+(or less than) values in group B". Put another way: "If we pick a random
+value from group A, it will be reliably greater (or less than) than a
+random value from group B". This latter phrasing is why tests for
+location are sometimes referred to as tests for "stochastic dominance".
+
+When comparing groups, the data are usually best shown using a
+**boxplot**, also known as a **box-and-whiskers** plot. The exact
+implementation varies between software packages, but boxplots usually
+show the median, interquartile range (approximately), extreme values,
+and possible outliers (if any). This is preferable to a **barplot**,
+which shows only the sample mean and the sample standard deviation in
+each group.
+
+## Comparing 2 groups: the *t*-test
+
+## Comparing 3 or more groups: ANOVA
+
+## Nonparametric alternatives
+
+# Correlation
+
+## Linear correlation
+
+## Nonlinear correlation
+
+## Do you need a *p*-value for a correlation?
+
+# Linear models
+
+## Linear regression
+
+## Analysis of covariance (ANCOVA)
+
+# Generalized linear models
+
+## Models for counts: Poisson GLM
+
+## Models for presence: Logistic Regression
+
+## Models for proportions: Binomial Regression
