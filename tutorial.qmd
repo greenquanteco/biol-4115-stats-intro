@@ -413,7 +413,7 @@ When summarizing values, we typically write either $\bar{x}\pm s$ or *median (IQ
 :::{.callout-tip}
 **Missing values**
 
-When a dataset contains missing values, you need to tell the summarizing function to ignore them, ususally with argument `na.rm=TRUE`. For example, `mean(x, na.rm=TRUE)`.
+When a dataset contains missing values, `NA`, you need to tell the summarizing function to ignore them. Usually we add the argument `na.rm=TRUE`. For example, `mean(x, na.rm=TRUE)`.
 :::
 
 ## Summarizing by groups in R
@@ -469,32 +469,131 @@ aggregate(Petal.Length~Species, data=iris,
           function(z){any(is.nan(z))})
 ```
 
+:::{.callout-tip}
+**which()-craft
+
+In expressions like the one above, where we selected observations that met a certain condition (e.g., `which(x>4)`), the function `which()` is not strictly necessary. The expression 
+:::
+
 # Tests comparing groups
 
 In a test for difference in mean or location, we are interested in
-whether observations differ between groups. This can mean the **central
-tendency**, or "typical value", usually expressed as the **mean**
-(arithmetic average). A test of this kind evaluates a prediction like,
-"a typical value in group A is different from a typical value in group
-B". Alternatively, we can test for a difference in **location**: the
+whether observations differ between groups. Most of the time we are testing whether the central tendency differs between groups. A test of this kind evaluates a prediction like, "a typical value in group A is different from a typical value in group B".
+
+Alternatively, we can test for a difference in **location**: the
 relative position of random values from 2 or more groups. This is a
 slightly different statement: "values in group A tend to be greater than
 (or less than) values in group B". Put another way: "If we pick a random
 value from group A, it will be reliably greater (or less than) than a
-random value from group B". This latter phrasing is why tests for
-location are sometimes referred to as tests for "stochastic dominance".
+random value from group B". Tests for location are performed on the **rank order** of the values, not the values themselves.
 
 When comparing groups, the data are usually best shown using a
 **boxplot**, also known as a **box-and-whiskers** plot. The exact
 implementation varies between software packages, but boxplots usually
 show the median, interquartile range (approximately), extreme values,
-and possible outliers (if any). This is preferable to a **barplot**,
-which shows only the sample mean and the sample standard deviation in
-each group.
+and possible outliers (if any) Run the command `?boxplot.stats` to see a description of how boxplots are calculated in R. 
 
 ## Comparing 2 groups: the *t*-test
 
+The ***t*-test** compares the means of two groups. There are many kinds of *t*-tests, but the case of comparing two means is the most common. Technically, this is called a **"two-sided, two-sample *t*-test** or sometimes a **Student's *t*-test**, although the latter term is not accurate because modern software uses a different method of accounting for unequal variances between groups (the "Welch-Satterthwaite correction"). Most of the time you can just say *t*-test and people will know what you mean.
+
+***t*-test example**
+
+Here is an example of running a *t*-test on two samples. If you try the code yourself with a different random number seed (`set.seed()`), or without a random number seed, your numbers will be slightly different because of the random number generation.
+
+```{r}
+# make some data
+set.seed(123) # ensures same numbers each time RNG is done
+x1 <- rnorm(n=20, mean=10, sd=4)
+x2 <- rnorm(n=20, mean=15, sd=4)
+
+# run the test
+t.test(x1, x2)
+```
+
+You can also use a *t*-test on data within a data frame using the formula interface. Notice that this code is essentially the same as the code for `boxplot()` and `aggregate()`.
+
+```{r}
+# grab 2 of the species in iris
+use.species <- c("versicolor", "virginica")
+iris.2spp <- iris[which(iris$Species %in% use.species),]
+
+# remove the now-missing level of "setosa"
+# (this will matter for the plot in the next code block)
+iris.2spp$Species <- droplevels(iris.2spp$Species)
+
+# run the t-test
+t.test(Petal.Length~Species, data=iris.2spp)
+```
+
+Show the difference using a boxplot:
+
+```{r}
+boxplot(Petal.Length~Species, data=iris.2spp,
+        xlab="Species", ylab="Petal length (cm)")
+```
+
+### Non-parametric alternative
+
+Sometimes, your data will not meet all of the assumptions of a *t*-test. That is beyond the scope of what we are doing here, but if you find yourself in that situation, you can try a **Wilcoxon rank sum test** instead of  *t*-test. They syntax is the same as for `t.test()`.
+
+```{r}
+wilcox.test(Petal.Length~Species, data=iris.2spp)
+```
 ## Comparing 3 or more groups: ANOVA
+
+### One-way ANOVA
+
+When there are 3 or more groups, we do not use a *t*-test and instead use **analysis of variance**, or **ANOVA**. There are two ways to do an ANOVA in R, one using `aov()` and the other using `lm()`. We'll use `aov()` 
+
+When there is only 1 explanatory **factor** (grouping variable), regardless of how many **levels** (groups) it has, the test is called a **one-way ANOVA**.
+
+
+```{r}
+# aov style
+mod1 <- aov(Petal.Length~Species, data=iris)
+summary(mod1)
+```
+
+The `summary()` command produces the **ANOVA table**, which summarizes how the variance is partitioned between different sources. In this case, the total sum of squared deviations of all observations is $437.1 + 27.2=464.3$. ANOVA partitions that into variation due to species (437.1) and residual or "left over" variation (27.2). We sometimes think of the 437.1 as "between group" variation, and the 27.2 as "within group" variation. If there is a significant effect of species, then roughly speaking there should be more between group variation than within group variation. Really it is the variation per degree of freedom (`Df`) that defines that ratio, or $F$ statistic. Because of the way the table rounds values, it obscures the fact that $F=MSB/MSE$, or the ratio of the mean between group sums of squares and the mean within group sums of squares. The values shown, 281.55 and 0.19, are rounded so much that their ratio doesn't equal the printed F value.
+
+Anyway, the **omnibus test** above shows that at least 1 level, or group, of `Species` differs from one of the others. To see the tests for the pairwise differences, we have to run a **post-hoc test**. One of the most common post-hoc tests for ANOVA is the Tukey Honest Significant Difference (HSD) test:
+
+```{r}
+TukeyHSD(mod1)
+```
+
+The Tukey output shows us that every group differs from every other, with *p<0.001* (here *p* is rounded to 0, although it can never be 0). The differences in group means are presented with their **95% confidence intervals (CI)**. For example, the difference between the group means of versicolor and setosa is 2.798 cm, with 95% CI = [2.594, 3.002]. 
+
+### Two-way ANOVA (and more way)
+
+When there are 2 or more explanatory factors, the test is called a **two-way ANOVA**, or **three-way ANOVA**, and so on. We can add additional factors to an ANOVA with the `+` sign.
+
+```{r}
+# make a copy of iris with an extra grouping variable
+iris2 <- iris
+iris2$Flower <- c("purple", "pink")
+
+# fit the two-way ANOVA without interaction
+mod2 <- aov(Petal.Length~Species+Flower, data=iris2)
+summary(mod2)
+```
+
+Adding the colors that way just repeated them until the column was full: purple, pink, purple, pink, and so on until the new vector had length 150 (the number of rows in `iris`). This essentially distributes the colors randomly with respect to the species and thus the petal lengths, so it should be no surprise that flower color had no effect on petal length ($p=0.61$). A Tukey test confirms the effects of species, and the non-effect of `Flower`. Technically, you don't need to do or report a Tukey test if the main effect is nonsignificant.
+
+```{r}
+TukeyHSD(mod2, which="Species")
+```
+
+Something we could also ask is whether there was an **interaction** between species and color: a situation where one variable changes the effect of another. Maybe purple an pink flowers really do have different petal lengths, but only in one species. Testing for an interaction would help detect that kind of pattern. To test for an interaction between two variables, use the `*` symbol instead of the `+`.
+
+```{r}
+# fit the two-way ANOVA WITH interaction
+mod3 <- aov(Petal.Length~Species*Flower, data=iris2)
+summary(mod3)
+```
+
+The interaction is nonsignificant, so we should instead report the main effects in the model without the interaction (`mod2`). If there is an interaction present, then it becomes impossible to discuss the effects of one variable without discussing the effects of the other. We will explore interactions more in the section on ANCOVA below.
 
 ## Nonparametric alternatives
 
