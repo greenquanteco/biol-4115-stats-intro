@@ -563,9 +563,11 @@ Anyway, the **omnibus test** above shows that at least 1 level, or group, of `Sp
 TukeyHSD(mod1)
 ```
 
-The Tukey output shows us that every group differs from every other, with *p<0.001* (here *p* is rounded to 0, although it can never be 0). The differences in group means are presented with their **95% confidence intervals (CI)**. For example, the difference between the group means of versicolor and setosa is 2.798 cm, with 95% CI = [2.594, 3.002]. 
+The Tukey output shows us that every group differs from every other, with *p<0.001* (here *p* is rounded to 0, although it can never be 0). The differences in group means are presented with their **95% confidence intervals (CI)**. For example, the difference between the group means of versicolor and setosa is 2.798 cm, with 95% CI = [2.594, 3.002]. Notice that none of these CI include 0: this suggests that a true difference of 0 between any two groups is very unlikely. Even without examining *p*-values, CI provide a useful way to evaluate both the direction and magnitude of differences.
 
-### Two-way ANOVA (and more way)
+One of the nice things about the Tukey HSD test is that the *p*-values are automatically adjusted for **multiple comparisons**, a phenomenon where the probability of a false positive goes up as a [researcher performs more tests](https://xkcd.com/882/), using a customized version of the probability distribution for the test statistic. This controls the **family wise error rate**, or total false positive probability for this set of three tests. 
+
+### Two-way ANOVA (and more ways)
 
 When there are 2 or more explanatory factors, the test is called a **two-way ANOVA**, or **three-way ANOVA**, and so on. We can add additional factors to an ANOVA with the `+` sign.
 
@@ -585,6 +587,7 @@ Adding the colors that way just repeated them until the column was full: purple,
 TukeyHSD(mod2, which="Species")
 ```
 
+
 Something we could also ask is whether there was an **interaction** between species and color: a situation where one variable changes the effect of another. Maybe purple an pink flowers really do have different petal lengths, but only in one species. Testing for an interaction would help detect that kind of pattern. To test for an interaction between two variables, use the `*` symbol instead of the `+`.
 
 ```{r}
@@ -597,11 +600,225 @@ The interaction is nonsignificant, so we should instead report the main effects 
 
 ## Nonparametric alternatives
 
+If your data do not meet the assumptions for ANOVA, then you can use a **Kruskal-Wallis test**. This is sometimes called a "nonparametric ANOVA" but that isn't quite accurate. Essentially, the Kruskal-Wallis test compares the relative rank order of observations between groups to test whether values in each group tend to be consistently larger than or smaller than other groups. 
+
+```{r}
+# run the Kruskal-Wallis test
+mod4 <- kruskal.test(Petal.Length~Species, data=iris)
+mod4
+```
+
+Similar to what happened in the one-way ANOVA example above, the omnibus test was significant, so we need to run a post-hoc test. The most common post-hoc test for a Kruskal-Wallis test is the **Dunn test**, available in package `dunn.test`.
+
+```{r}
+#| eval: false
+
+# install the package if needed
+install.packages("dunn.test")
+
+# load the package so you can use its functions
+library(dunn.test)
+```
+
+```{r}
+#| include: false
+#| message: false
+
+library(dunn.test)
+```
+
+Now, we can perform the Dunn's test to see which groups likely differ from each other, much like we used the Tukey HSD test above.
+
+```{r}
+dunn.test(iris$Petal.Length, g=iris$Species, method="holm")
+```
+
+The output shows, for each pair of factor levels, the differences in median ranks between groups (the top number), and the adjusted *p*-value for each comparison. The *p*-value is adjusted for multiple comparisons. In this case, we used a [Holm correction](https://en.wikipedia.org/wiki/Holm%E2%80%93Bonferroni_method).
+
 # Correlation
+
+**Correlation** is a statistical relationship where changes in one variable are reliably associated with changes in another variable. This relationship need not be causal, hence the famous mantra, “correlation does not equal causation”. As such, correlation is usually a **descriptive technique**, which lets researchers characterize patterns, rather than an **inferential technique**, which lets researchers make estimates about unknown parameters (i.e., infer unobserved quantities). 
+
+Correlations are typically expressed as a **correlation coefficient**, a value that indicates the strength of the correlation by its magnitude and the direction of the correlation by its sign.
+
+- **Positive correlation:** as one variable gets larger, the other variable does too. Correlation coefficient approaches $+1$.
+
+- **Negative correlation:** as one variable gets larger, the other variable gets smaller. Correlation coefficient approaches $-1$.
+
+When a correlation coefficient is near 0, this indicates no correlation.
+
+```{r}
+#| echo: false
+#| fig-width: 9
+#| fig-height: 6
+
+
+set.seed(777)
+
+ad <- function(x){
+  res <- x + ifelse(any(x<0), abs(min(x)), 0)
+  res <- res/max(res)
+  return(res)
+}
+
+n <- 24
+x <- runif(n, 0, 10)
+y1 <- 1 + 2.3 * x + rnorm(n, 0, 3)
+y1 <- ad(y1)
+y2 <- 1 + 2.3 * x + rnorm(n, 0, 16)
+y2 <- ad(y2)
+y3 <- 1 + 2.3 * x + rnorm(n, 0, 64)
+y3 <- ad(y3)
+
+y4 <- 20 - 2.8 * x + rnorm(n, 0, 6)
+y4 <- ad(y4)
+
+y5 <- 20 - 2.8 * x + rnorm(n, 0, 15.5)
+y5 <- ad(y5)
+
+y6 <- runif(n)
+
+par(mfrow=c(2,3), mar=c(5.1, 5.1, 1.1, 1.1), bty="n",
+    lend=1, las=1, cex.axis=1.3, cex.lab=1.3,
+    mgp=c(1.5, 1, 0))
+plot(x, y1, xlab="One variable", ylab="Another variable", yaxt="n", xaxt="n")
+text(0, 0.9, expression(italic(r)==0.8), adj=0, cex=1.4)
+title(main="Strong positive correlation", adj=0)
+axis(side=1, at=c(0, 10), labels=NA)
+axis(side=2, at=c(0, 1), labels=NA)
+
+plot(x, y2, xlab="One variable", ylab="Another variable", yaxt="n", xaxt="n")
+text(0, 0.9, expression(italic(r)==0.5), adj=0, cex=1.4)
+title(main="Weak positive correlation", adj=0)
+axis(side=1, at=c(0, 10), labels=NA)
+axis(side=2, at=c(0, 1), labels=NA)
+
+plot(x, y3, xlab="One variable", ylab="Another variable", yaxt="n", xaxt="n")
+text(0, 0.9, expression(italic(r)=="0.0"), adj=0, cex=1.4)
+title(main="No correlation", adj=0)
+axis(side=1, at=c(0, 10), labels=NA)
+axis(side=2, at=c(0, 1), labels=NA)
+
+plot(x, y4, xlab="One variable", ylab="Another variable", yaxt="n", xaxt="n")
+text(10, 0.9, expression(italic(r)==-0.8), adj=1, cex=1.4)
+title(main="Strong negative correlation", adj=0)
+axis(side=1, at=c(0, 10), labels=NA)
+axis(side=2, at=c(0, 1), labels=NA)
+
+plot(x, y5, xlab="One variable", ylab="Another variable", yaxt="n", xaxt="n")
+text(10, 0.9, expression(italic(r)==-0.5), adj=1, cex=1.4)
+title(main="Weak negative correlation", adj=0)
+axis(side=1, at=c(0, 10), labels=NA)
+axis(side=2, at=c(0, 1), labels=NA)
+
+plot(x, y6, xlab="One variable", ylab="Another variable", yaxt="n", xaxt="n")
+text(10, 0.9, expression(italic(r)=="0.0"), adj=1, cex=1.4)
+title(main="No correlation", adj=0)
+axis(side=1, at=c(0, 10), labels=NA)
+axis(side=2, at=c(0, 1), labels=NA)
+```
 
 ## Linear correlation
 
+When we suspect that two variables are correlated, and that the shape of that relationship is a straight line, we can use **Pearson's product moment correlation**, also called **Pearson's *r***. 
+
+```{r}
+# calculate linear correlation coefficient
+cor(iris$Petal.Length, iris$Petal.Width)
+```
+
+You can also request a significance test on the coefficient, although some might consider this unnecessary because correlation is inherently a descriptive technique. If you are using correlation as a hypothesis test, however, you do need a *p*-value.
+
+```{r}
+cor.test(iris$Petal.Length, iris$Petal.Width)
+```
+
+One of the neat features of `cor()` is that you can get a correlation matrix showing the correlation coefficients between many pairs of variable at once.
+
+```{r}
+# correlation matrix between the numerical variables in iris
+cor(iris[,1:4])
+```
+
+Here we see that each variable is perfectly correlated with itself (the 1s on the diagonal). Sepal length and sepal width are negatively correlated (`-0.1175698`) while petal length and petal width are strongly positively correlated (`0.8717538`). You only need to report correlation coefficients to 2 or 3 decimal places.
+
+There isn’t a built-in way to check for significant correlations between many pairs of variables at once. This is because `cor.test()` only works with one pair at a time. Fortunately, it’s not hard to do in a loop:
+
+```{r}
+# data frame with just the numeric variables
+dx <- iris[,1:4]
+
+# set up data frame to hold results
+# combn(..., 2) returns matrix of all unique pairs of names
+# t(ranspose) this and turn into a data frame.
+cor.df <- as.data.frame(t(combn(names(dx), 2)))
+cor.df$r <- NA
+cor.df$p <- NA
+
+# find the r and p values in a loop
+for(i in 1:nrow(cor.df)){
+  # test once per iteration  
+  curr <- cor.test(dx[,cor.df$V1[i]], dx[,cor.df$V2[i]])
+  # pull out values we need from correlation test result
+  # and round to 3 decimal places
+  cor.df$r[i] <- round(curr$estimate,3)
+  cor.df$p[i] <- round(curr$p.value, 3)
+}#close i loop
+
+# print result
+cor.df
+```
+
 ## Nonlinear correlation
+
+Many processes and relationships in biology are not linear, and sometimes we want to calculate correlation coefficients for those relationships. Consider the figure below. The left panel clearly shows some relationship between X and Y, but it is not linear and using a linear correlation coefficient might miss something.
+
+```{r}
+#| echo:FALSE
+#| fig.width: 8
+#| fig.height: 4
+
+
+set.seed(123)
+n <- 50
+x <- runif(n, 0, 5)
+
+y1 <- 1 + x*2.1 + rnorm(n, 0, 1)
+y2 <- (13*x)/(1.5+x)+rnorm(n, 0, 1)
+y2 <- plogis(y1-6)
+
+par(mfrow=c(1,2), mar=c(4.1, 4.1, 1.1, 1.1),
+    lend=1, las=1, bty="n", cex.lab=1.4, mgp=c(2, 1, 0))
+
+plot(x, y2, xlim=c(0, 5), xaxt="n", yaxt="n",
+    xlab="X", ylab="Y")
+seqx <- seq(min(x), max(x), length=100)
+points(seqx, plogis(2.1*seqx-5), type="l", lwd=3, col="red")
+axis(side=1, at=c(0, 5), labels=NA)
+axis(side=2, at=c(0, 1), labels=NA)
+title(main="Nonlinear pattern", adj=0)
+
+plot(rank(x), rank(y2), xaxt="n",
+    xlab="rank(X)", ylab="rank(Y)", yaxt="n")
+axis(side=1, at=c(0, 50), labels=NA)
+axis(side=2, at=c(0, 50), labels=NA)
+segments(0, 0, 50, 50, lwd=3, col="red")
+title(main="Rank-transformed", adj=0)
+
+```
+
+However, if you **rank-transform** the data, the relationship turns into something more linear. A “rank-transform” assigns the smallest value value 0, the second smallest value to 1, and so on. Rank-transforming these data lets us calculate a nonparametric, nonlinear correlation. The nonparametric equivalent of Pearson’s *r* is **Spearman’s $\rho$** ("rho"). It can be obtained using code similar to what was done for linear correlation.
+
+```{r}
+# just the correlation
+cor(iris$Petal.Length, iris$Sepal.Width, method="spearman")
+```
+
+```{r}  
+cor.test(iris$Petal.Length, iris$Sepal.Width, method="spearman")
+```
+
+When you run a nonlinear correlation test, you will often get the warning `Warning in cor.test.default ... : Cannot compute exact p-value with ties`. All this means is that some of the rankings are tied. This warning can be safely ignored.
 
 ## Do you need a *p*-value for a correlation?
 
