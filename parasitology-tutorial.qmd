@@ -15,7 +15,7 @@ editor:
     wrap: 72
 ---
 
-# Overview
+# Overview {#sec-overview}
 
 This document is an overview for some statistical methods commonly used
 in parasitology (and biology in general). It is not meant to be a
@@ -33,7 +33,7 @@ Install R *before* installing RStudio. The download links at the link
 above should take care of this for you.
 :::
 
-# Why do we have to do statistics?
+# Why do we have to do statistics? {#sec-why}
 
 Science works by testing **hypotheses**, or proposed explanations for
 natural phenomena, against data. At some point, a scientist must
@@ -67,7 +67,7 @@ stronger than what would be expected by chance are called
 **statistically significant**. For historical (and somewhat arbitrary
 and controversial reasons), biologists usually use $p<0.05$ as the threshold for significance.
 
-# Types of tests
+# Types of tests {#sec-typesoftests}
 
 There are thousands of statistical tests out there, but most biologists
 only ever need a handful. One of the hardest parts of "doing statistics"
@@ -95,22 +95,43 @@ necessarily biological statements. Translating biological ideas and
 questions into statistical statements and questions is one of the
 hardest parts of doing statistics.
 
-The hypotheses that we test in biology tend to fall into just a few
-categories:
+The hypotheses that we test in biology, and thus the statistical tests we perform, tend to fall into 4 categories:
 
-1.  Testing for a difference in **mean** or **location** between groups. If you have 2 groups, use a *t*-test. If you have 3 or more groups, use analysis of variance (ANOVA).
+1.  Testing for a difference in **mean** or **location** between groups.
 
-2.  Testing for a **continuous relationship** between a **response variable** (or multiple variables) and one or more **predictor variables**. Also referred to as predicting or **modeling** a continuous variable. You can try correlation if you don't care about the relationship, or linear regression or ANCOVA if you do.
+    - If you have 2 groups, use a *t*-test (see @sec-groups-ttest).
+  
+    - If you have 3 or more groups, use analysis of variance (ANOVA; see @sec-groups-anova).
 
-3.  Testing for (lack of) **independence between categories** of observations. You probably want a $\chi^2$ test ("chi-squared"). 
+2.  Testing for a **continuous relationship** between a **response variable** and one or more **predictor variables**. Also referred to as predicting or **modeling** a response variable.
 
-4.  **Classifying** observations based on predictor variables. For binary classification, start with logistic regression. For $>2$ categories, try CART.
+    - If you don't need a prediction equation test for a correlation (see @sec-correlation)
+  
+    - If you wnat to model continuous $y$ as a function of one or more continuous $x$ variables, and the relationship is linear, try linear regression (see @sec-regression-regression). 
+  
+    - If you want to model continuous $y$ as a function of a continuous predictor $x$ and a factor predictor (grouping or categorical variable), try analysis of covariance (ANCOVA) (see @sec-regression-ancova).
+    
+    - If you want to model **count data**, you should use a Poisson GLM (@sec-glm-poisson).
+    
+    - If you want to model proportions, you need a binomial GLM (@sec-glm-binomial).
+
+3.  Testing for (lack of) **independence between categories** of observations.
+
+    - You have very small sample sizes: try a Fisher's exact test (see @sec-contingency-fisher).
+    
+    - You have moderate to large sample size: try a $\chi^2$ test ("chi-squared") (see @sec-contingency-chisq). 
+
+4.  **Classifying** observations based on predictor variables.
+
+    - For binary classification, start with logistic regression (see @sec-glm-logistic).
+    
+    - For $>2$ categories, try classification and regression trees (CART). Beyond the scope of this tutorial, but see package `rpart` and its documentation.
 
 These categories are not mutually exclusive...some questions can be analyzed in $>1$ way!
 
-# Summary statistics
+# Summary statistics {#sec-summary}
 
-## Summarizing data in R
+## Summarizing single variables {#sec-summary-single}
 
 The most common summary statistics have eponymous functions in R: `mean()`, `sd()`, `var()`, `IQR()`, `quantile()`, and so on. 
 
@@ -172,7 +193,7 @@ When summarizing values, we typically write $\bar{x}\pm s$.
 When a dataset contains missing values, `NA`, you need to tell the summarizing function to ignore them. Usually we add the argument `na.rm=TRUE`. For example, `mean(x, na.rm=TRUE)`.
 :::
 
-## Summarizing by groups in R
+## Summarizing by groups in R {#sec-summary-agg}
 
 To summarize data by group in R, use the function `aggregate()`. For this example, we will use the built-in *iris* dataset, [which contains measurements taken from 150 flowers of 3 different species of *Iris*](https://en.wikipedia.org/wiki/Iris_flower_data_set). 
 
@@ -200,10 +221,10 @@ Here is an example where we count the number of missing values in a variable...a
 
 ```{r}
 aggregate(Petal.Length~Species, data=iris, 
-          function(z){any(is.na(z))})
+          function(z){length(which(is.na(z)))})
 ```
 
-# Tests comparing groups
+# Tests comparing groups {#sec-groups}
 
 In a test for difference in mean or location, we are interested in
 whether observations differ between groups. Most of the time we are testing whether the central tendency differs between groups. A test of this kind evaluates a prediction like, "a typical value in group A is different from a typical value in group B".
@@ -221,7 +242,7 @@ implementation varies between software packages, but boxplots usually
 show the median, interquartile range (approximately), extreme values,
 and possible outliers (if any) Run the command `?boxplot.stats` to see a description of how boxplots are calculated in R. 
 
-## Comparing 2 groups: the *t*-test
+## Comparing 2 groups: the *t*-test {#sec-groups-ttest}
 
 The ***t*-test** compares the means of two groups. There are many kinds of *t*-tests, but the case of comparing two means is the most common. Technically, this is called a **"two-sided, two-sample *t*-test** or sometimes a **Student's *t*-test**, although the latter term is not accurate because modern software uses a different method of accounting for unequal variances between groups (the "Welch-Satterthwaite correction"). Most of the time you can just say *t*-test and people will know what you mean.
 
@@ -262,12 +283,13 @@ Show the difference using a boxplot:
 #| label: fig-ttestboxplot
 #| 
 boxplot(Petal.Length~Species, data=iris.2spp,
-        xlab="Species", ylab="Petal length (cm)")
+        xlab="Species", ylab="Petal length (cm)",
+        ylim=c(0, 8))
 ```
 
-## Comparing 3 or more groups: ANOVA
+## Comparing 3 or more groups: ANOVA {#sec-groups-anova}
 
-### One-way ANOVA
+### One-way ANOVA {#sec-groups-anova-1way}
 
 When there are 3 or more groups, we do not use a *t*-test and instead use **analysis of variance**, or **ANOVA**.
 
@@ -279,7 +301,7 @@ mod1 <- aov(Petal.Length~Species, data=iris)
 summary(mod1)
 ```
 
-The `summary()` command produces the **ANOVA table**, which summarizes how the variance is partitioned between different sources. In this case, the total sum of squared deviations of all observations is $437.1 + 27.2=464.3$. ANOVA partitions that into variation due to species (437.1) and residual or "left over" variation (27.2). We sometimes think of the 437.1 as "between group" variation, and the 27.2 as "within group" variation. If there is a significant effect of species, then roughly speaking there should be more between group variation than within group variation. Really it is the variation per degree of freedom (`Df`) that defines that ratio, or $F$ statistic. Because of the way the table rounds values, it obscures the fact that $F=MS_{between}/MS_{residuals}$, or the ratio of the mean between group sums of squares and the mean within group sums of squares. The values shown, 281.55 and 0.19, are rounded so much that their quotient doesn't equal the printed F value.
+The `summary()` command produces the **ANOVA table**, which summarizes how the variance is partitioned between different sources. In this case, the total sum of squared deviations of all observations is $437.1 + 27.2=464.3$. ANOVA partitions that into variation due to species (437.1) and residual or "left over" variation (27.2). We sometimes think of the 437.1 as "between group" variation, and the 27.2 as "within group" variation. If there is a significant effect of species, then roughly speaking there should be more between group variation than within group variation. Really it is the variation per degree of freedom (`Df`) that defines that ratio, or $F$ statistic. Because of the way the table rounds values, it obscures the fact that $F=MS_{between}/MS_{residuals}$, or the ratio of the mean between group sums of squares and the mean within group sums of squares. The values shown, 218.55 and 0.19, are rounded so much that their quotient doesn't equal the printed $F$ value.
 
 :::{.callout-tip}
 **Rounding errors**
@@ -297,7 +319,17 @@ The Tukey output shows us that every group differs from every other, with *p<0.0
 
 One of the nice things about the Tukey HSD test is that the *p*-values are automatically adjusted for **multiple comparisons**, a phenomenon where the probability of a false positive goes up as a [researcher performs more tests](https://xkcd.com/882/), using a customized version of the probability distribution for the test statistic. This controls the **family wise error rate**, or total false positive probability for this set of three related tests. 
 
-### Two-way ANOVA (and more ways)
+As with a *t*-test, a boxplot is usually the best way to show the results of an ANOVA.
+
+```{r}
+#| fig-cap: "Boxplot showing that petal length is greater in *Iris versicolor* than in *Iris setosa*, and greater still in *Iris virginica*."
+#| fig-alt:  "Boxplot showing that petal length is greater in *Iris versicolor* than in *Iris setosa*, and greater still in *Iris virginica*."
+#| label: fig-ttestboxplot2
+
+boxplot(Petal.Length~Species, data=iris, ylim=c(0, 8))
+```
+
+### Two-way ANOVA (and more ways) {#sec-groups-anova-2way}
 
 When there are 2 or more explanatory factors, the test is called a **two-way ANOVA**, or **three-way ANOVA**, and so on. We can add additional factors to an ANOVA with the `+` sign.
 
@@ -317,9 +349,59 @@ Adding the colors that way just repeated them until the column was full: purple,
 TukeyHSD(mod2, which="Species")
 ```
 
-## Interactions: one variable affects another
+### ANOVA with ordered factors
 
-Something we could also ask is whether there was an **interaction** between species and color: a situation where one variable changes the effect of another. Maybe purple an pink flowers really do have different petal lengths, but only in one species. Testing for an interaction would help detect that kind of pattern. To test for an interaction between two variables, use the `*` symbol instead of the `+`.
+Some factors can represent group membership, but still have an inherent ordering to them. For example, soft drinks come in sizes "small", "medium", and "large". These are categories, but categories in order: small < medium < large. In contrast, the three species in the `iris` dataset have no ordering. 
+
+You may have data with a factor for age, like "juvenile", "subadult", "adult". These categories correspond to ages, but cannot be treated as literal numbers of years or months. It would also be a mistake to treat the comparison of "juvenile vs. subadult" the same as the comparison of "juvenile vs. adult".
+
+If you analyze an ordered factor, R will estimate polynomial terms of order up to $k-1$, where $k$ is the number of factor levels. Let's create a toy dataset to illustrate working with an ordered factor.
+
+```{r}
+ages <- c("juvenile", "subadult", "adult")
+dx <- data.frame(age=rep(ages, each=20))
+# tell R that this is an ordered factor
+dx$age <- factor(dx$age, levels=ages, ordered=TRUE)
+
+# compare this to iris$Species:
+dx$age
+```
+
+
+```{r}
+#| fig-cap: "Boxplot showing that french fry consumption is greatest in subadults, less in adults, and lowest in juveniles."
+#| fig-alt:  "Boxplot showing that french fry consumption is greatest in subadults, less in adults, and lowest in juveniles."
+#| label: fig-ttestboxplot3
+
+# add y values
+dx$ff <- NA
+dx$ff[which(dx$age=="juvenile")] <- rnorm(20, 5, 1)
+dx$ff[which(dx$age=="subadult")] <- rnorm(20, 15, 1)
+dx$ff[which(dx$age=="adult")] <- rnorm(20, 10, 1)
+
+# inspect the data
+boxplot(ff~age, data=dx, ylab="French fry consumption")
+```
+Now fit the model using the ordered factor `age`:
+
+```{r}
+mod11 <- aov(ff~age, data=dx)
+summary(mod11)
+```
+
+The omnibus test shows us that `age` is significant. However, because we have an ordered factor, we don't want something like a Tukey test. Instead, we want to see what patterns in `age` are significant.
+
+```{r}
+summary.lm(mod11)
+```
+
+The coefficients for `age.L` and `age.Q` are the linear and quadratic trends, respectively. In this case, there is a positive linear trend (`3.5113`), so $Y$ generally increases with age category. There is also a significant negative quadratic trend (`-6.2328`), meaning that the relationship is curved. These trends describe the *shape* of the trend with respect to the age categories, not literally the values of $Y$ given $X$ (as in a polynomial equation), so you need to inspect the boxplot or a plot of means.
+
+This analysis was simple because there were only 3 levels of `age`. When an ordered factor has many levels, you may observe "significant" polynomial trends that are biologically unimportant or difficult to interpret. It is up to you as a biologist to exercise some judgement in deciding how many terms to interpret.
+
+## Interactions: one variable affects another {#sec-groups-interactions}
+
+Something we could also ask is whether there was an **interaction** between species and color: a situation where one variable changes the effect of another. Maybe purple and pink flowers really do have different petal lengths, but only in one species. Testing for an interaction would help detect that kind of pattern. To test for an interaction between two variables, use the `*` symbol instead of the `+`.
 
 ```{r}
 # fit the two-way ANOVA WITH interaction
@@ -329,8 +411,7 @@ summary(mod3)
 
 The interaction is nonsignificant, so we should instead report the main effects in the model without the interaction (`mod2`). If there is an interaction present, then it becomes impossible to discuss the effects of one variable without discussing the effects of the other. We will explore interactions more in the section on ANCOVA below.
 
-
-# Correlation
+# Correlation {#sec-correlation}
 
 **Correlation** is a statistical relationship where changes in one variable are reliably associated with changes in another variable. This relationship need not be causal, hence the famous mantra, “correlation does not equal causation”. As such, correlation is usually a **descriptive technique**, which lets researchers characterize patterns, rather than an **inferential technique**, which lets researchers make estimates about unknown parameters (i.e., infer unobserved quantities). 
 
@@ -415,7 +496,7 @@ axis(side=1, at=c(0, 10), labels=NA)
 axis(side=2, at=c(0, 1), labels=NA)
 ```
 
-## Linear correlation
+## Linear correlation {#sec-correlation-linear}
 
 When we suspect that two variables are correlated, and that the shape of that relationship is a straight line, we can use **Pearson's product moment correlation**, also called **Pearson's *r***. 
 
@@ -430,9 +511,9 @@ You can also request a significance test on the coefficient, although some might
 cor.test(iris$Petal.Length, iris$Petal.Width)
 ```
 
-## Scatterplots
+## Scatterplots {#sec-correlation-scatterplots}
 
-The best way to illustrate a possible correlation between two numeric variables is in a **scatterplot**. Typically we put the **response** or **dependent** variable on the vertical (Y) axis, and the **predictor** or **dependent** variable on the horizontal (X) axis. However, in a correlation test neither variable is assumed to cause the other, so you can plot variables as you please.
+The best way to illustrate a possible correlation between two numeric variables is in a **scatterplot**. Typically we put the **response** or **dependent** variable on the vertical (Y) axis, and the **predictor** or **independent** variable on the horizontal (X) axis. However, in a correlation test neither variable is assumed to cause the other, so you can plot variables as you please.
 
 The `R` syntax for scatterplots is simple. The `plot()` command builds most kinds of plots. The first argument contains the $x$ values, and the second argument the $y$ values. Other arguments like `xlab` and `ylim` follow, to set graphical labels, limits, and other parameters. Many experienced users also preface their `plot()` command with `par()`, which gives global control over many graphical options.
 
@@ -473,7 +554,7 @@ legend("topleft", legend=iris.species,
 
 ```
 
-## Nonlinear correlation
+## Nonlinear correlation {#sec-correlation-nonlinear}
 
 Many processes and relationships in biology are not linear, and sometimes we want to calculate correlation coefficients for those relationships. Consider the figure below. The left panel clearly shows some relationship between $X$ and $Y$, but it is not linear and using a linear correlation coefficient might miss something.
 
@@ -527,13 +608,15 @@ cor.test(iris$Petal.Length, iris$Sepal.Width, method="spearman")
 
 When you run a nonlinear correlation test, you will often get the warning `Warning in cor.test.default ... : Cannot compute exact p-value with ties`. All this means is that some of the rankings are tied. This warning can be safely ignored.
 
-# Linear regression
+# Linear regression {#sec-regression}
 
 Linear models describe relationships where a change in some response variable $Y$ is described by a unit change in a predictor $X$ multiplied by a constant called the **slope**. In other words, if $X$ increases by 1, then $Y$ increases by the slope. This change in $Y$ per unit change in $X$ is the same for all $X$, so a graph of the model is a straight line. This is why linear models are *called* linear models. The most important are the *t*-test and ANOVA (which we already covered), and linear regression and analysis of covariance (ANCOVA).
 
-## Lots of analyses are linear models in disguise
+## Lots of analyses are linear models in disguise (or can be) {#sec-regression-types}
 
-Many models that people fit to data, including some that appear nonlinear, are actually linear models in disguise. This is because transforming one or both of $X$ and $Y$ can "straighten out" a nonlinear curve into a linear one.
+Many models or curves that people fit to data, even some whose curves are nonlinear, are actually linear models in a statistical sense. A "linear model" does not mean that the graph must be a straight line. It means that the model is built by adding together predictor variables that are multiplied by constants (slopes), and these slopes are used only as multipliers of the predictor variables. For example, both $y=\beta_0+\beta_1x$ and $y=\beta_0+\beta_1x+\beta_2x^2+\beta_3x^3$ are linear models because the coefficients ($beta$ terms) are used only as multipliers of the predictor variables.
+
+Other models that appear nonlinear can *become* linear models through transformation. For example, an exponential model $y=ae^{\beta_1x}$ is nonlinear, but log-transforming both sides yields the linear expression $\log\left(y\right)=log\left(a\right)+\beta_1x$. The section below illustrates a few of these "linear models in disguise" so you can recognize and apply these methods on your own data.
 
 ### Ordinary linear models
 
@@ -543,11 +626,11 @@ $$y=\beta_0+\beta_1x$$
 
 and is the same as the equation for a line that you learned in algebra: $y=mx+b$. Statisticians just use $\beta_0$ for the $Y$-intercept and $\beta_1$ for the slope instead of $b$ and $m$.
 
-**Why it's linear:** Rate of change $dy/dx$ is a scalar ($\beta_1$) and constant for all $X$.
+**Why it's linear:** the parameters $\beta_0$ and $\beta_1$ appear only as multipliers or additive constants, and are combined by addition.
 
 ### Polynomials
 
-A polynomial is a function such as $Y=\beta_0+\beta_1X+\beta_2X^2+...+\beta_kX^k$, where $k$ is the **order** of the polynomial. A polynomial of order 2 is a quadratic equation. A polynomial of order 3 is a cubic, and so on. Polynomials have well-known shapes, such as the parabola of the quadratic function.
+A polynomial is a function such as $Y=\beta_0+\beta_1X+\beta_2X^2+...+\beta_kX^k$, where $k$ is the **order** of the polynomial. A polynomial of order 2 is a quadratic equation. A polynomial of order 3 is a cubic, and so on. Polynomials have well-known shapes, such as the parabola of the quadratic function. Any polynomial with order $\ge2$ will not be a straight line.
 
 ```{r}
 #| echo: false
@@ -584,42 +667,15 @@ title(main="Order 3: Cubic")
 
 ```
 
-**Why it's linear:** Although the rate of change $dy/dx$ of a polynomial is a function of $x$ and not a constant, the rate of change with respect to any $x$ term *is* a constant. E.g., $dy/\left(dx^2\right)=\beta_2$. Compare the graph above to the graph below. By squaring or cubing the $X$ term, we straightened out the line.
-
-```{r}
-#| echo: false
-#| fig.width: 9
-#| fig.height: 3
-#| fig-cap: "Polynomial functions become linear (straight) when plotted against $X$ raised to the order of the polynomial. This is why polynomials can be treated as linear models."
-#| fig-alt:  "Polynomial functions become linear (straight) when plotted against X raised to the order of the polynomial. This is why polynomials can be treated as linear models."
-#| label: fig-polynomials2
-
-
-par(mfrow=c(1,3), mar=c(5.1, 5.1, 1.1, 1.1), cex.lab=1.3, cex.axis=1.3,
-    bty="n", lend=1, las=1)
-plot(x1, y1, type="l", lwd=3, xaxt="n", yaxt="n", xlab="X", ylab="Y")
-axis(side=1, at=c(-4, 4), labels=NA)
-axis(side=2, at=c(-2,4), labels=NA)
-title(main="Order 1: Linear")
-
-plot(x1^2, y2, type="l", lwd=3, xaxt="n", yaxt="n", ylim=c(-1,7),
-     xlab=expression(X^2), ylab="Y")
-axis(side=1, at=c(0,16), labels=NA)
-axis(side=2, at=c(-1,7), labels=NA)
-title(main="Order 2: Quadratic")
-
-plot(x1^3, y3, type="l", lwd=3, xaxt="n", yaxt="n",
-     xlab=expression(X^3), ylab="Y")
-axis(side=1, at=c(-64, 64), labels=NA)
-axis(side=2, at=c(-15, 15), labels=NA)
-title(main="Order 3: Cubic")
-```
+**Why it's linear:** although the graph may be curved, the parameters $\beta_0$, $\beta_1$, $\beta_2$, and so on appear only as multipliers on predictor variables, are combined by addition, and are not raised to powers, exponentiated, or use inside other functions.
 
 ### Exponentials
 
-The exponential function $y=ae^{bx}$ is ubiquitous in biology because it describes compounding growth (like compound interest). 
+The exponential function $y=ae^{bx}$ is ubiquitous in biology because it describes compounding growth (like compound interest). This function is not linear, but it can be turned into and analyzed as linear by log-transforming both sides.
 
-**Why it's linear:** While the exponential function appears nonlinear, it can be made linear by log-transforming both sides:
+![Rick and Morty meme saying this sounds like linear with extra steps.](tut05.jpg){#fig-extrasteps fig-cap="Well that sounds like linear with extra steps."}
+
+**Why it *can be* linear:** While the exponential function appears nonlinear, it can be made linear by log-transforming both sides:
 
 $$log\left(y\right)=log\left(ae^{bx}\right)$$
 
@@ -634,16 +690,16 @@ which is the form of a straight line with intercept $log\left(a\right)$ and slop
 :::{.callout-tip}
 **Logarithm bases**
 
-Mathematicians and statisticians almost always work with the **natural logarithm**, which uses Euler's number $e$ ($\approx2.718282$)as its base. The natural logarithm can be written $log\left(x\right)$, $log_e\left(x\right)$, or $ln\left(x\right)$. Natural log is used because many [equations related to growth or change become easier](https://www.youtube.com/watch?v=m2MIpDrF7Es) when $e$ is the base. In this tutorial, and any math or statistics text, assume natural logarithm.
+Mathematicians and statisticians almost always work with the **natural logarithm**, which uses Euler's number $e$ ($\approx2.7182$) as its base. The natural logarithm can be written $log\left(x\right)$, $log_e\left(x\right)$, or $ln\left(x\right)$. Natural log is used because many [equations related to growth or change become easier](https://www.youtube.com/watch?v=m2MIpDrF7Es) when $e$ is the base. In this tutorial, and any math or statistics text, assume natural logarithm.
 
-In contrast, scientists and engineers often use other bases, like $log_{10}$ or $log_2$, because these are more intuitive for humans. You can use whatever base you like, but be explicit about what you did.
+In contrast, scientists and engineers often use other bases, like $log_{10}$ or $log_2$, because these are more intuitive for humans. You can use whatever base you like so long as you are clear about what you did.
 :::
 
 ### Power laws
 
 **Power laws** of the form $Y=aX^b$ are also ubiquitous in biology, as they describe proportional growth. Power laws are similar to exponential functions, but with a key difference: in a power law, $X$ is in the base and is raised to a power, while in an exponential, $X$ is in the exponent of some other base. 
 
-**Why it's linear:** Like an exponential, a power law can be linearized by taking the logarithm of both sides.
+**Why it *can be* linear:** Like an exponential, a power law can be linearized by taking the logarithm of both sides.
 
 $$log\left(Y\right)=log\left(aX^b\right)$$
 
@@ -651,9 +707,9 @@ $$log\left(Y\right)=log\left(a\right)+b\times log\left(X\right)$$
 
 In this form, the power law is linear with intercept $log\left(a\right)$ and slope $b$.
 
-## Linear regression
+## Linear regression {#sec-regression-regression}
 
-The linear regression model describes a pattern where the response variable $Y$ increases as a linear function of the predictor variable $X$. It looks like this:
+The linear regression model describes a pattern where the response variable $Y$ changes as a linear function of the predictor variable $X$. It looks like this:
 
 $$Y=\beta_0+\beta_1X+\varepsilon$$
 
@@ -731,7 +787,7 @@ points(prx$Petal.Width, prx$mn, type="l", lwd=2, col="red")
 
 ```
 
-## Multiple linear regression
+## Multiple linear regression {#sec-regression-multiple}
 
 Linear regression is easily extended to **multiple linear regression**, where there are >1 continuous predictors. Just as with ANOVA, additional predictor variables are added to the model formula using +.
 
@@ -742,7 +798,7 @@ summary(mod6)
 
 Adding predictors to a multiple regression model will almost always increase the model fit (e.g., proportion of variance explained, $R^2$), but this does not mean you should keep adding predictors. Multiple regression models are extremely vulnerable to **overfitting**, where random noise (i.e., residual variation) is modeled as if it was part of the deterministic part of the model. Multiple regression models are also highly vulnerable to **collinearity**, where the predictors are correlated with each other. When collinear predictors are included in a model, it is impossible for the model to unambiguously partition the sums of squares associated with each predictor.
  
-## Analysis of covariance (ANCOVA)
+## Analysis of covariance (ANCOVA) {#sec-regression-ancova}
 
 Sometimes biologists want to test for effects of one variable while controlling for another. For example, the slope between $Y$ and $X$ might differ between groups. Or, groups might differ only after accounting for some continuous covariate. Here are some specific examples:
 
@@ -859,7 +915,7 @@ legend("topleft", legend=c("Group A", "Group B"),
        bty="n")
 ```
 
-# Generalized linear models
+# Generalized linear models {#sec-glm}
 
 The **generalized linear model (GLM)** is a framework of related methods that generalize the linear model by relaxing two of the conditions in which linear models are used. In a GLM:
 
@@ -876,7 +932,7 @@ $$\eta=\beta_0+\beta_1X$$
 
 The linear predictor, $\eta$ ("eta") is a linear function of $X$. The expected value of Y, $\mu$, is equal to $\eta$. That is, $\mu$ is related to $\eta$ by the identity function. Finally, observed values in $Y$ are drawn from a normal distribution with mean $\mu$ and SD $\sigma$.
 
-## Models for counts: Poisson GLM
+## Models for counts: Poisson GLM {#sec-glm-poisson}
 
 Another common GLM biologists encounter is the **Poisson GLM for count data**. Count data are exactly what they sound like: values that are counted and can only take on non-negative integer values. Because counts can only be non-negative integers, the normal distribution is not appropriate because it is supported on the entire real number line. Here is the Poisson GLM:
 
@@ -930,7 +986,7 @@ As usual, we can see the model parameters with `summary()`.
 summary(mod8)
 ```
 
-We can get a good sense of how well the model fits the data by calculating a pseudo-$R^2$ as $\left(Dev_{null}-Dev_{res}\right)/Dev_{null}$, or in this case $(161.939-61.671)/161.939=0.619$. The AIC, 293.45, doesn't mean much on its own but is useful for comparing models; generally, models with smaller AIC are better fit to the data.
+We can get a good sense of how well the model fits the data by calculating a pseudo-$R^2$ as $\left(Dev_{null}-Dev_{res}\right)/Dev_{null}$, or in this case $(179.544-65.133)/179.544=0.637$. The AIC, 302.62, doesn't mean much on its own but is useful for comparing models; generally, models with smaller AIC are better fit to the data.
 
 You can then generate and draw a trendline much as we have before, with one wrinkle: calculate the expected values on the link scale, then exponentiate to get the values on the data scale. If you use `qpois()` to calculate expected values, you will get a step function rather than a smooth curve, because `qpois()` returns values from the Poisson distribution...which must be non-negative integers.
 
@@ -967,7 +1023,7 @@ legend("topleft", legend=c("Correct", "Wrong"),
 Sometimes count data can be **overdispersed**, in which case they have more variance than would be expected under a Poisson distribution. In such a case, you can try fitting a **negative binomial GLM**, which has an extra term to account for the excess variance. Negative binomial GLMs are available in package `MASS`.
 :::
 
-## Models for presence: Logistic Regression
+## Models for binary outcomes: Logistic Regression {#sec-glm-logistic}
 
 Sometimes biologists need to model **binary outcomes**: response variables that can take on only one of two values such as alive or dead, presence or absent, or reproduced or did not reproduce. The tool for such variables is **logistic regression**. 
 
@@ -1021,9 +1077,9 @@ Odds and probabilities are two complementary ways of expressing how likely some 
 **Odds ratios** are just one more step, expression a change in the probability as the change in odds. Odds ratios are particularly useful when discussing changes in probability near 0 or 1. E.g., changing probability from 0.96 to 0.98 or from 0.52 to 0.54 both have the same change in terms of probability ($+0.02$), but the first change is a much larger change in odds (OR = 2.04 vs. 1.08).
 :::
 
-Unlike other GLMs, we don't use $R^2$ or pseudo-$R^2$ to evaluate logistic regression. Instead, we can measure its predictive accuracy. The hallmark of a well-fitting logistic regression model is that it will have very high **sensitivity** (true positive rate) and very high **specificity** (true negative rate). I.e., when the model predicts a 1 or 0, we can be very confident in that prediction being correct.
+For logistic regression, we can either use pseudo-$R^2$ to measure goodness-of-fit, or we can use a statistic called **AUC** to measure how well the model discriminates between observations where $Y=1$ and those where $Y=0$.
 
-The **receiver operating characteristic (ROC) curve** summarizes the trade-off between sensitivity and specificity for a logistic regression model. The area under the curve, or **AUC**, is a value that ranges from about 0.5 (as accurate as a coin flip) to 1 (perfect sensitivity and specificity). It is available in the package `pROC`. 
+The **receiver operating characteristic (ROC) curve** summarizes the trade-off between sensitivity (true positive rate) and specificity (true negative rate) for a logistic regression model. The area under the ROC curve, or **AUC**, is a value that ranges from about 0.5 (as accurate as a coin flip) to 1 (perfect sensitivity and specificity). It is available in the package `pROC`. 
 
 ```{r}
 #| eval: false
@@ -1042,7 +1098,7 @@ library(pROC)
 library(pROC)
 ```
 
-In order to get the AUC, we need to first get the model predictions (1s and 0s), and then compare that to the original data.
+In order to get the AUC, we need to first get the model predictions and then compare those to the original data.
 
 ```{r}
 #| fig-cap: "Receiver operating characteristic (ROC) curve for a logistic regression on simulated data. The area under the curve (AUC) is a measure of predictive accuracy."
@@ -1053,7 +1109,9 @@ p9 <- predict(mod9, type="response")
 roc9 <- roc(dx$y~p9, plot=TRUE, print.auc=TRUE)
 ```
 
-The AUC of this model, 0.942, means that we can have high confidence in the model predictions.
+The AUC of this model, 0.942, means that the model is very good at distinguishing observations where $Y=1$ from observations where $Y=0$. Many people interpret AUC as a measure of predictive accuracy, but what it really does is measure how well the model orders the probabilities of $Y=1$ for each observation. AUC is the probability that a randomly chosen positive observation will receive a higher score than a randomly chosen negative observation. It does not tell us the absolute probability of a prediction being correct; a model could have high AUC even if its predicted probabilities were poorly calibrated.
+
+The take-home message is that AUC is one useful tool in evaluating the performance of a logistic regression model, but, like $R^2$ for linear models or AIC for models in general, it represents but one perspective among many.
 
 Plotting a trendline for a logistic regression means plotting the data and a line for $p(Y=1)$. 
 
@@ -1072,7 +1130,7 @@ points(prx$x, prx$mn, type="l", lwd=3, col="red")
 ```
 
 
-## Models for proportions: Binomial Regression
+## Models for proportions: Binomial Regression {#sec-glm-binomial}
 
 The last GLM that biologists encounter is **binomial regression**, which analyzes proportions or percentages. This is very close related to logistic regression in that they both use the **binomial distribution**. For a $Y$ variable containing proportions or probabilities in the open interval $\left(0,1\right)$:
 
@@ -1123,11 +1181,11 @@ Like Poisson regression, we can evaluate the model using the pseudo-$R^2$ and co
 1-mod10$deviance/mod10$null.deviance
 ```
 
-## Gamma GLMs for overdispersed continuous data
+## Gamma GLMs for overdispersed continuous data  {#sec-glm-gamma}
 
 Coming soon!
 
-# Tests for contingency
+# Tests for contingency {#sec-contingency}
 
 Sometimes biological data do not come with neatly-defined numeric responses. Often, the response “variable” is whether or not an observation belongs to a particular category or not—or a combination of categories. These can be called **categorical data**, where the information of interest is not a numeric value, but identity or classification. Consider the (made up) data from a pesticide exposure experiment below:
 
@@ -1143,9 +1201,9 @@ This table tallies the fates of 48 plants that were *exposed* or *not exposed* t
 
 A good clue for whether or not you need to do a test for independence is whether or not your data are best summarized in a contingency table such as the table above. A contingency table shows how often observations fall into each category within a dataset.
 
-### Fisher's exact test
+## Fisher's exact test {#sec-contingency-fisher}
 
-**Fisher’s exact test** is a test for independence in contingency tables that is usually only used when sample sizes are small. This is because the *p*-value calculation involves a numerous factorials, which can quickly overwhelm even modern desktop computers. Consequently, most software use an approximation to the true *p*-value, obviating the purpose of an exact test. For any situation where a Fisher’s exact test is appropriate, a chi-square ($\chi^2$) test will usually give the same answer, but faster (as long as the sample size is large enough).
+**Fisher’s exact test** is a test for independence in contingency tables that is usually only used when sample sizes are small or when the $\chi^2$ test gives questionable approximations.
 
 ```{r}
 # make an R version of the matrix above
@@ -1162,7 +1220,7 @@ fisher.test(a)
 
 Because Fisher’s is an exact test (i.e., the *p*-value is an direct, exact calculation), there is no test statistic and no degrees of freedom to report.
 
-### Chi-squared test
+## Chi-squared test {#sec-contingency-chisq}
 
 The chi-square ($\chi^2$) test is a more powerful, flexible, and computationally efficient cousin of the Fisher’s exact test. It works by comparing the input contingency table to what the contingency table would be expected to look like under the assumption of independence. That is, if the null hypothesis were true. The test statistic, $\chi^2$, measures how different the two contingency tables are. The test works better with large sample sizes; with small sample sizes, the approximations use to estimate the *p*-value can break down. A good rule of thumb is that every cell (or most cells) of the hypothetical null contingency table should have $\geq5$ observations.
 
